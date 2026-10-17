@@ -1,0 +1,11 @@
+{
+  "name": "biruza",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Бирюза – цветы, шары и подарки",
+  "scripts": {
+    "start": "node server.cjs",
+    "build": "node scripts/build.cjs",
+    "check": "node scripts/check.cjs"
+  }
+}
