@@ -13,6 +13,19 @@ jobs:
       - name: Download website
         uses: actions/checkout@v4
 
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Version updated styles and scripts
+        run: node scripts/version-assets.cjs
+
+      - name: Check website before publishing
+        run: |
+          node scripts/check.cjs
+          node scripts/check-asset-versions.cjs
+
       - name: Upload website to REG.RU
         uses: SamKirkland/FTP-Deploy-Action@v4.3.6
         with:
