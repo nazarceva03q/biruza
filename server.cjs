@@ -3,8 +3,8 @@ const fs = require('node:fs');
 const path = require('node:path');
 const root = __dirname;
 const port = Number(process.env.PORT || 4177);
-const types = {'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'application/javascript; charset=utf-8','.svg':'image/svg+xml','.png':'image/png','.webp':'image/webp','.ttf':'font/ttf','.woff2':'font/woff2','.json':'application/json'};
-const allowed = new Set(['index.html','privacy.html','styles.css','social.css','config.js','data.js','app.js','favicon.svg']);
+const types = {'.html':'text/html; charset=utf-8','.css':'text/css; charset=utf-8','.js':'application/javascript; charset=utf-8','.jpg':'image/jpeg','.jpeg':'image/jpeg','.svg':'image/svg+xml','.png':'image/png','.webp':'image/webp','.ttf':'font/ttf','.woff2':'font/woff2','.json':'application/json'};
+const allowed = new Set(['index.html','privacy.html','styles.css','social.css','config.js','data.js','app.js','catalog-data.js','favicon.svg']);
 const server = http.createServer((req,res) => {
   let relative;
   try { relative = decodeURIComponent(new URL(req.url,'http://localhost').pathname).replace(/^\/+/, '') || 'index.html'; } catch { res.writeHead(400);res.end();return; }
