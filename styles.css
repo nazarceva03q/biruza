@@ -126,3 +126,6 @@ footer .logo.footer-logo{display:block!important;position:relative!important;wid
 @media(max-width:600px){.product-info h3{min-height:82px}.product-info p{min-height:130px}.product-info>.product-bottom{display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;min-height:100px;gap:10px;flex-wrap:nowrap}.product-bottom>span{min-height:28px}.product-bottom>.button{align-self:flex-start;min-height:42px}.hero-copy{min-height:0!important;padding-top:32px;padding-bottom:26px}.hero{min-height:0!important}.hero-image{min-height:0!important}.hero .actions{margin-top:18px;margin-bottom:0}.hero-lead{margin-bottom:20px!important}.trust-strip{padding-top:22px;padding-bottom:22px}}
 
 @media(min-width:601px){.product-info>.product-bottom{display:grid;grid-template-columns:minmax(0,1fr) auto;height:72px;min-height:72px;align-items:center;gap:12px}.product-bottom>span{max-width:100%!important}.product-bottom>.button{justify-self:end;align-self:center}}@media(max-width:600px){.product-info>.product-bottom{height:110px;min-height:110px;flex:0 0 110px}.product-bottom>.button{margin-top:auto}}
+
+/* Mobile: restore the former top breathing room, retain the trimmed bottom. */
+@media(max-width:600px){.hero.container{border-radius:24px 24px 0 0;overflow:hidden}.hero-copy{padding-top:96px;padding-bottom:26px}}
