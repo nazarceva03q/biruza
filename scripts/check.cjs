@@ -6,7 +6,7 @@ const root = path.resolve(__dirname,'..');
 const files = ['index.html','privacy.html','app.js','catalog-data.js','data.js','config.js','styles.css','social.css'];
 for(const file of files){const text=fs.readFileSync(path.join(root,file),'utf8');assert(!text.includes('\u2014'),`${file}: long dash`);if(file.endsWith('.js'))new vm.Script(text,{filename:file});}
 const ctx = {window:{}};vm.runInNewContext(fs.readFileSync(path.join(root,'config.js'),'utf8'),ctx);vm.runInNewContext(fs.readFileSync(path.join(root,'data.js'),'utf8'),ctx);
-assert.equal(ctx.window.BIRUZA_CONFIG.phone,'+79101783964');
+assert.equal(ctx.window.BIRUZA_CONFIG.phone,'+79937483964');
 assert.equal(ctx.window.BIRUZA_CONFIG.address,'г. Владимир, ул. Мира, 53');
 const html=fs.readFileSync(path.join(root,'index.html'),'utf8');
 assert.equal((html.match(/<h1\b/g)||[]).length,1);
