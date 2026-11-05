@@ -12,7 +12,7 @@ function version(file) {
 for (const name of ['index.html', 'privacy.html']) {
   const filename = path.join(root, name);
   const html = fs.readFileSync(filename, 'utf8');
-  const updated = html.replace(/\b(src|href)="([^"?#]+\.(?:css|js))(?:\?[^"#]*)?"/g, (match, attr, file) => {
+  const updated = html.replace(/\b(src|href)="([^"?#]+\.(?:css|js|svg))(?:\?[^"#]*)?"/g, (match, attr, file) => {
     if (/^(?:https?:)?\/\//.test(file)) return match;
     return `${attr}="${file}?v=${version(file)}"`;
   });

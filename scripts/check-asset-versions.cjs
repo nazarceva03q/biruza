@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const root = path.resolve(__dirname, '..');
 for (const file of ['index.html', 'privacy.html']) {
   const html = fs.readFileSync(path.join(root, file), 'utf8');
-  const links = [...html.matchAll(/\b(?:src|href)="([^"?#]+\.(?:css|js))([^"#]*)"/g)];
+  const links = [...html.matchAll(/\b(?:src|href)="([^"?#]+\.(?:css|js|svg))([^"#]*)"/g)];
   assert(links.length > 0);
   for (const [, asset, query] of links) {
     const content = fs.readFileSync(path.join(root, asset), 'utf8').replace(/\r\n/g, '\n');
