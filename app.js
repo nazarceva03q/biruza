@@ -49,7 +49,7 @@ document.addEventListener('click',e=>{const b=e.target.closest('button,a');if(!b
  if(b.dataset.detail){slide=0;detail(b.dataset.detail)}
  if(b.hasAttribute('data-card-slide')){const c=b.closest('[data-card]'),a=photos(find(c.dataset.card)),i=(Number(c.dataset.index)+Number(b.dataset.cardSlide)+a.length)%a.length;c.dataset.index=i;$('img',c).src=a[i]}
  if(b.hasAttribute('data-slide')){slide+=Number(b.dataset.slide);detail(detailId)}if(b.hasAttribute('data-thumb')){slide=Number(b.dataset.thumb);detail(detailId)}
- if(b.dataset.image)open(`<h2 id="dialog-title">Рассмотреть фото</h2><div class="lightbox"><img src="${esc(b.dataset.image)}" alt="Увеличенное изображение"></div>${detailId?'<button class="text-link" data-detail="'+detailId+'">Вернуться к товару</button>':''}`,'image');
+ if(b.dataset.image)open(`<span id="dialog-title" class="sr-only">Фотография</span><div class="lightbox"><img src="${esc(b.dataset.image)}" alt="Увеличенное изображение"></div>${detailId?'<button class="text-link" data-detail="'+detailId+'">Вернуться к товару</button>':''}`,'image');
  if(b.dataset.qty){const id=b.dataset.qty;cart[id]=Math.min(99,(cart[id]||0)+Number(b.dataset.delta));if(cart[id]<=0)delete cart[id];save();showCart()}
  if(b.dataset.remove){delete cart[b.dataset.remove];save();showCart()}
  if(b.hasAttribute('data-checkout'))form('Оформление заказа',true);if(b.hasAttribute('data-back')){dialog.close();$('#flowers').scrollIntoView()}
@@ -67,6 +67,11 @@ moveMobileActions();addEventListener('resize',moveMobileActions);
 
 function positionReviewArrows(){const el=$('#reviews'),nav=$('.carousel-nav',el),head=$('.section-head',el),grid=$('.review-grid',el);if(!nav)return;if(innerWidth>1100){head.after(nav)}else if(innerWidth<=600){grid.before(nav)}else{grid.after(nav)}}
 positionReviewArrows();addEventListener('resize',positionReviewArrows);
+
+const zoomGlyph='<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="10" cy="10" r="6.5"/><path d="m15 15 6 6M10 7v6M7 10h6"/></svg>';
+function markZoomPhotos(){document.querySelectorAll('img').forEach(img=>{if(img.closest('.lightbox,.social-icon,.detail-thumbs')||img.parentElement.querySelector(':scope > .zoom-indicator'))return;const parent=img.parentElement;parent.classList.add('zoom-photo-target');const mark=document.createElement('span');mark.className='zoom-indicator';mark.setAttribute('aria-hidden','true');mark.innerHTML=zoomGlyph;parent.append(mark)})}
+markZoomPhotos();new MutationObserver(markZoomPhotos).observe(document.body,{childList:true,subtree:true});
+document.addEventListener('click',e=>{const target=e.target.closest('.zoom-indicator')?.parentElement.querySelector('img')||e.target.closest('img');if(!target||target.closest('.lightbox,.social-icon,.detail-thumbs'))return;e.preventDefault();e.stopImmediatePropagation();open('<span id="dialog-title" class="sr-only">Фотография</span><div class="lightbox"><img src="'+esc(target.currentSrc||target.src)+'" alt="'+esc(target.alt||'Фотография')+'"></div>','image')},true);
 
 })();
 
