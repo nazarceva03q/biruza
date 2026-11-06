@@ -11,6 +11,8 @@ window.BIRUZA_CONFIG = Object.freeze({
   mapsUrl: 'https://yandex.ru/maps/?text=Владимир%2C%20улица%20Мира%2C%2053',
   // Только реальный проверенный обработчик. Секреты сюда не помещать.
   inquiryEndpoint: '',
+  catalogEndpoint: 'https://functions.yandexcloud.net/d4eh5nh981l02sbguq0d',
+  mediaBaseUrl: 'https://storage.yandexcloud.net/biruza33-media',
   privacyUrl: '',
   consentVersion: '',
   timeZone: 'Europe/Moscow'

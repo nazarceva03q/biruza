@@ -1,45 +1,37 @@
-name: Deploy to REG.RU
-
+name: Build and publish static website
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   workflow_dispatch:
-
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: biruza-pages
+  cancel-in-progress: false
 jobs:
-  deploy:
+  build:
     runs-on: ubuntu-latest
     steps:
-      - name: Download website
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: '22'
-
-      - name: Version updated styles and scripts
-        run: node scripts/version-assets.cjs
-
-      - name: Check website before publishing
-        run: |
-          node scripts/check.cjs
-          node scripts/check-asset-versions.cjs
-
-      - name: Upload website to REG.RU
-        uses: SamKirkland/FTP-Deploy-Action@v4.3.6
+      - run: node scripts/version-assets.cjs
+      - run: node scripts/check.cjs
+      - run: node scripts/check-asset-versions.cjs
+      - run: node --test bot/tests/*.cjs
+      - run: node scripts/build.cjs
+      - uses: actions/upload-pages-artifact@v3
         with:
-          server: ${{ secrets.FTP_SERVER }}
-          username: ${{ secrets.FTP_USERNAME }}
-          password: ${{ secrets.FTP_PASSWORD }}
-          protocol: ftp
-          local-dir: ./
-          server-dir: / 
-          exclude: |
-            **/.git*
-            **/.git*/**
-            **/node_modules/**
-            **/*.md
-            **/package.json
-            **/package-lock.json
-            **/server.cjs
+          path: dist
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment
