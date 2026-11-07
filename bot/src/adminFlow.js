@@ -52,9 +52,10 @@ async function reduce(s,e,catalog){
   if(cmd?.startsWith('gallery_page:'))return galleryPage(Number(cmd.slice(13))||0);
   if(cmd?.startsWith('delete_photo_pick:')){const id=cmd.slice(18);if(!s.visiblePhotos?.includes(id)||!c.galleries[s.gallery].some(p=>p.id===id))return galleryPage(s.galleryPage||0);s.photoId=id;s.step='delete_gallery_confirm';return result('Удалить это фото из раздела «'+names[s.gallery]+'»?',[[['Да, удалить','delete_photo_confirm'],['Нет','delete_photo_back']],...back],c.galleries[s.gallery].find(p=>p.id===id).url)}
  }
+ if(s.step==='delete_gallery_done'&&cmd==='delete_photo_more')return galleryPage(s.galleryPage||0);
  if(s.step==='delete_gallery_confirm'){
   if(cmd==='delete_photo_back')return galleryPage(s.galleryPage||0);
-  if(cmd==='delete_photo_confirm'){await catalog.removePhoto(s.gallery,s.photoId,'gallery-delete:'+e.id);return reset('🗑 Фото удалено из раздела «'+names[s.gallery]+'».')}
+  if(cmd==='delete_photo_confirm'){await catalog.removePhoto(s.gallery,s.photoId,'gallery-delete:'+e.id);s.step='delete_gallery_done';delete s.photoId;return result('🗑 Фото удалено из раздела «'+names[s.gallery]+'».',[[['🗑 Удалить ещё фото','delete_photo_more']],...back])}
  }
  if(cmd?.startsWith('pick:')&&s.step==='search'){
   const id=cmd.slice(5);if(!s.matches?.includes(id))return result('Этот результат поиска устарел. Напишите название ещё раз.');const p=c.products.find(p=>p.id===id);if(!p)return result('Этот товар уже удалён. Напишите название для нового поиска.');s.draft=structuredClone(p);s.expected=p.version;
