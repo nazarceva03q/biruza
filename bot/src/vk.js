@@ -17,7 +17,8 @@ class VK{
    const mime=(r.headers.get('content-type')||'').split(';')[0];if(!['image/jpeg','image/png','image/webp'].includes(mime))throw Error('PREVIEW_MIME');
    const parts=[];let size=0;for await(const part of r.body){size+=part.length;if(size>10*1024*1024)throw Error('PREVIEW_SIZE');parts.push(Buffer.from(part))}
    const bytes=Buffer.concat(parts);
-   // Upload one photo at a time. A fresh server is required after an upload 5xx.
+   // Some VK-issued upload routes reject POST with 405 while other routes work.
+   // Always request a fresh signed URL on retry; never rewrite its host or path.
    let lastError;
    for(let attempt=0;attempt<3;attempt++){
     try{
@@ -34,7 +35,7 @@ class VK{
      return 'photo'+photo.owner_id+'_'+photo.id+(photo.access_key?'_'+photo.access_key:'');
     }catch(error){
      lastError=error;
-     if(signal.aborted||!/^PREVIEW_UPLOAD_HTTP_5\d\d$/.test(error.message)||attempt===2)throw error;
+     if(signal.aborted||!/^PREVIEW_UPLOAD_HTTP_(405|5\d\d)$/.test(error.message)||attempt===2)throw error;
      await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)));
     }
    }
