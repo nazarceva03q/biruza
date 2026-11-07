@@ -1,5 +1,8 @@
 'use strict';
 const {hash}=require('./storage');
+const {randomBytes}=require('node:crypto');
+function multipartPhoto(bytes,mime){const boundary='BiruzaPhoto'+randomBytes(16).toString('hex'),extension=mime==='image/png'?'png':mime==='image/webp'?'webp':'jpg';const body=Buffer.concat([Buffer.from('--'+boundary+'\r\nContent-Disposition: form-data; name="photo"; filename="photo.'+extension+'"\r\nContent-Type: '+mime+'\r\n\r\n'),bytes,Buffer.from('\r\n--'+boundary+'--\r\n')]);return {body,headers:{'Content-Type':'multipart/form-data; boundary='+boundary,'Content-Length':String(body.length)}}}
+
 const randomId=s=>parseInt(hash(s).slice(0,8),16)%2147483646+1;
 class VK{
  constructor(token,options={}){if(!token)throw Error('VK_CONFIG');this.token=token;this.mediaBase=options.mediaBase;this.photoPreviewEnabled=options.photoPreviewEnabled??true}
@@ -21,9 +24,9 @@ class VK{
      const upload=await this.call('photos.getMessagesUploadServer',{peer_id:peer},0,signal),endpoint=new URL(upload.upload_url);
      // The URL comes only from the authenticated VK API, never from a user.
      if(endpoint.protocol!=='https:'||endpoint.username||endpoint.password||endpoint.port&&endpoint.port!=='443'||!endpoint.hostname.includes('.')||/^(localhost|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(endpoint.hostname)||endpoint.hostname.includes(':'))throw Error('PREVIEW_UPLOAD_URL');
-     const body=new FormData();body.append('photo',new Blob([bytes],{type:mime}),'photo.'+(mime==='image/png'?'png':mime==='image/webp'?'webp':'jpg'));
-     const saved=await fetch(endpoint,{method:'POST',body,redirect:'error',signal:AbortSignal.any([signal,AbortSignal.timeout(25000)])});
-     if(!saved.ok)throw Error('PREVIEW_UPLOAD_HTTP_'+saved.status);
+     const form=multipartPhoto(bytes,mime);
+     const saved=await fetch(endpoint,{method:'POST',body:form.body,headers:form.headers,redirect:'error',signal:AbortSignal.any([signal,AbortSignal.timeout(25000)])});
+     if(!saved.ok){const error=Error('PREVIEW_UPLOAD_HTTP_'+saved.status);const allow=(saved.headers.get('allow')||'').split(',').map(x=>x.trim()).filter(x=>['GET','POST','HEAD','OPTIONS','PUT','DELETE','PATCH'].includes(x)).join(',');error.uploadDiagnostic={host:endpoint.hostname,status:saved.status,allow:allow||'unspecified',responseType:(saved.headers.get('content-type')||'').split(';')[0].replace(/[^a-z0-9/+.-]/gi,'').slice(0,60)};throw error;}
      let data;try{data=await saved.json()}catch{throw Error('PREVIEW_UPLOAD_RESPONSE')}
      if(!data?.server||typeof data.photo!=='string'||!data.hash||data.photo==='[]')throw Error('PREVIEW_UPLOAD_EMPTY');
      const photos=await this.call('photos.saveMessagesPhoto',{server:data.server,photo:data.photo,hash:data.hash},0,signal),photo=photos?.[0];
@@ -55,4 +58,4 @@ class VK{
  async sendPart(peer,text,id){const result=await this.call('messages.send',{peer_ids:String(peer),message:text,random_id:randomId(id),disable_mentions:1,dont_parse_links:1});const item=Array.isArray(result)?result.find(x=>x.peer_id===peer):null;if(!item||item.error||!Number.isInteger(item.conversation_message_id)||item.conversation_message_id<=0)throw Error('VK_SEND_UNKNOWN');return item.conversation_message_id}
  async remove(peer,cmid){const r=await this.call('messages.delete',{peer_id:peer,cmids:String(cmid),delete_for_all:1});return Array.isArray(r)&&r.some(x=>x.peer_id===peer&&x.conversation_message_id===cmid&&x.response===1&&!x.error)}
 }
-module.exports={VK,randomId};
+module.exports={VK,randomId,multipartPhoto};
