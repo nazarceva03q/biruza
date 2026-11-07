@@ -20,7 +20,7 @@ function preview(p){
  return lines.join('\n');
 }
 const {score}=require('./search');
-function search(products,text){return products.map(p=>({p,score:score(p.name,text)})).filter(x=>x.score).sort((a,b)=>b.score-a.score||a.p.name.localeCompare(b.p.name,'ru')).slice(0,5).map(x=>x.p)}
+function search(products,text){return products.map(p=>({p,score:score(p.name,text)})).filter(x=>x.score).sort((a,b)=>b.score-a.score||a.p.name.localeCompare(b.p.name,'ru')).map(x=>x.p)}
 const galleryAliases={wedding:'Свадебные композиции Свадьбы Оформление свадеб',store_opening:'Открытия магазинов Оформление магазина',event:'Праздники и мероприятия Оформление праздников событий'};
 function photoManageRows(images){return images.map((_,i)=>[[`🗑 Удалить фото ${i+1}`,'photo_remove:'+i]]).concat([[['➕ Добавить фото','photos_add']],[['⬅️ Назад к предпросмотру','photos_back']]])}
 async function reduce(s,e,catalog){
@@ -41,22 +41,19 @@ async function reduce(s,e,catalog){
   s.draft={...category,id:'p-'+hash(e.id).slice(0,24),name:'',description:'',composition:'',price:null,priceLabel:'',hit:false,images:[],icon:category.domain==='balloons'?'balloon':category.domain==='gifts'?'gift':'flower',version:0};s.expected=0;return showField('photos');
  }
  if(cmd==='edit'||cmd==='delete'){s={step:'search',action:cmd};return result('Напишите название товара, который нужно '+(cmd==='delete'?'удалить, или название раздела оформления.':'изменить.'))}
- const showMatch=index=>{
-  const id=s.matches?.[index],p=c.products.find(p=>p.id===id);if(!p)return result('Этот товар уже удалён. Напишите название для нового поиска.');s.matchIndex=index;
-  const navigation=[];if(index>0)navigation.push(['← Предыдущий','match:'+(index-1)]);if(index+1<s.matches.length)navigation.push(['Следующий →','match:'+(index+1)]);
-  return result(`Товар ${index+1} из ${s.matches.length}\n\n${p.name}\n${pricing.format(p.price,p.priceLabel)}\n\n${p.composition||''}\n${p.description||''}\n\nКатегория: ${p.category}`,[[['Этот товар','pick:'+p.id]],...(navigation.length?[navigation]:[]),...back],p.images[0]);
- };
- if(s.step==='search'&&!cmd){const matches=search(c.products,text);if(s.action==='delete'){const found=galleries.map(id=>({id,score:score(galleryAliases[id],text)})).filter(x=>x.score).sort((a,b)=>b.score-a.score);if(found.length){s.step='delete_gallery_select';s.galleryMatches=found.map(x=>x.id);return result('Выберите раздел оформления:',found.map(x=>[[names[x.id],'delete_gallery:'+x.id]]).concat(matches.map(p=>[[p.name,'delete_product:'+p.id]]),back))}}if(!matches.length)return result('Ничего не найдено похожего на «'+text+'». Попробуйте написать по-другому.');s.matches=matches.map(p=>p.id);return showMatch(0)}
- if(s.step==='search'&&cmd?.startsWith('match:')){const index=Number(cmd.slice(6));if(Number.isInteger(index)&&index>=0&&index<(s.matches||[]).length)return showMatch(index);return result('Выберите товар из последнего результата поиска.')}
- const showGalleryPhoto=index=>{const list=c.galleries[s.gallery]||[];if(!list.length)return reset('В разделе «'+names[s.gallery]+'» больше нет фотографий.');s.step='delete_gallery_photo';s.photoIndex=Math.max(0,Math.min(index,list.length-1));const photo=list[s.photoIndex];s.photoId=photo.id;const nav=[];if(s.photoIndex>0)nav.push(['← Предыдущее','delete_photo_prev']);if(s.photoIndex+1<list.length)nav.push(['Следующее →','delete_photo_next']);return result(names[s.gallery]+'\nФото '+(s.photoIndex+1)+' из '+list.length,[[['🗑 Удалить это фото','delete_photo_select']],...(nav.length?[nav]:[]),...back],photo.url)};
+ const searchPage=page=>{const list=s.matches.map(id=>c.products.find(p=>p.id===id)).filter(Boolean);if(!list.length)return reset('Подходящих товаров больше нет. Выполните поиск заново.');const pages=Math.ceil(list.length/10);page=Math.max(0,Math.min(page,pages-1));const rows=[];if(page>0)rows.push(['← Предыдущие','search_page:'+(page-1)]);if(page+1<pages)rows.push(['Следующие →','search_page:'+(page+1)]);s.searchPage=page;return {session:s,reply:{text:'Выберите товар. Найдено: '+list.length+(pages>1?' · Страница '+(page+1)+' из '+pages:''),rows:[...(rows.length?[rows]:[]),...back],carousel:list.slice(page*10,page*10+10).map(p=>({title:p.name,description:pricing.format(p.price,p.priceLabel)+' · '+p.category,photo:p.images[0],label:'Этот товар',command:'pick:'+p.id}))}}};
+ if(s.step==='search'&&cmd?.startsWith('search_page:'))return searchPage(Number(cmd.slice(12))||0);
+ if(s.step==='search'&&!cmd){const matches=search(c.products,text);if(s.action==='delete'){const found=galleries.map(id=>({id,score:score(galleryAliases[id],text)})).filter(x=>x.score).sort((a,b)=>b.score-a.score);if(found.length){s.step='delete_gallery_select';s.galleryMatches=found.map(x=>x.id);return result('Выберите раздел оформления:',found.map(x=>[[names[x.id],'delete_gallery:'+x.id]]).concat(matches.map(p=>[[p.name,'delete_product:'+p.id]]),back))}}if(!matches.length)return result('Ничего не найдено похожего на «'+text+'». Попробуйте написать по-другому.');s.matches=matches.map(p=>p.id);return searchPage(0)}
+
+ const galleryPage=page=>{const list=c.galleries[s.gallery]||[];if(!list.length)return reset('В разделе «'+names[s.gallery]+'» больше нет фотографий.');const pages=Math.ceil(list.length/10);page=Math.max(0,Math.min(page,pages-1));s.step='delete_gallery_photo';s.galleryPage=page;s.visiblePhotos=list.slice(page*10,page*10+10).map(p=>p.id);const rows=[];if(page>0)rows.push(['← Предыдущие','gallery_page:'+(page-1)]);if(page+1<pages)rows.push(['Следующие →','gallery_page:'+(page+1)]);return {session:s,reply:{text:names[s.gallery]+' · Выберите фото для удаления.'+(pages>1?' Страница '+(page+1)+' из '+pages:''),rows:[...(rows.length?[rows]:[]),...back],carousel:list.slice(page*10,page*10+10).map((photo,i)=>({title:'Фото '+(page*10+i+1),description:names[s.gallery],photo:photo.url,label:'Удалить это фото',command:'delete_photo_pick:'+photo.id}))}}};
  if(s.step==='delete_gallery_select'&&cmd?.startsWith('delete_product:')){const p=c.products.find(p=>p.id===cmd.slice(15));if(!p)return reset('Товар уже удалён.');s.draft=structuredClone(p);s.expected=p.version;s.step='delete_confirm';return result('Удалить товар «'+p.name+'»?',[[['Да','delete_confirm'],['Нет','cancel']],...back])}
- if(s.step==='delete_gallery_select'&&cmd?.startsWith('delete_gallery:')){const id=cmd.slice(15);if(!s.galleryMatches.includes(id))return reset();s.gallery=id;return showGalleryPhoto(0)}
+ if(s.step==='delete_gallery_select'&&cmd?.startsWith('delete_gallery:')){const id=cmd.slice(15);if(!s.galleryMatches.includes(id))return reset();s.gallery=id;return galleryPage(0)}
  if(s.step==='delete_gallery_photo'){
-  if(cmd==='delete_photo_prev'||cmd==='delete_photo_next')return showGalleryPhoto(s.photoIndex+(cmd==='delete_photo_next'?1:-1));
-  if(cmd==='delete_photo_select'){s.step='delete_gallery_confirm';return result('Удалить это фото из раздела «'+names[s.gallery]+'»?',[[['Да, удалить','delete_photo_confirm'],['Нет','delete_photo_back']],...back],c.galleries[s.gallery].find(p=>p.id===s.photoId)?.url)}
+  if(cmd?.startsWith('gallery_page:'))return galleryPage(Number(cmd.slice(13))||0);
+  if(cmd?.startsWith('delete_photo_pick:')){const id=cmd.slice(18);if(!s.visiblePhotos?.includes(id)||!c.galleries[s.gallery].some(p=>p.id===id))return galleryPage(s.galleryPage||0);s.photoId=id;s.step='delete_gallery_confirm';return result('Удалить это фото из раздела «'+names[s.gallery]+'»?',[[['Да, удалить','delete_photo_confirm'],['Нет','delete_photo_back']],...back],c.galleries[s.gallery].find(p=>p.id===id).url)}
  }
  if(s.step==='delete_gallery_confirm'){
-  if(cmd==='delete_photo_back')return showGalleryPhoto(s.photoIndex);
+  if(cmd==='delete_photo_back')return galleryPage(s.galleryPage||0);
   if(cmd==='delete_photo_confirm'){await catalog.removePhoto(s.gallery,s.photoId,'gallery-delete:'+e.id);return reset('🗑 Фото удалено из раздела «'+names[s.gallery]+'».')}
  }
  if(cmd?.startsWith('pick:')&&s.step==='search'){
