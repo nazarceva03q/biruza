@@ -5,7 +5,7 @@ colors:
   dark: "#073d35"
   mint: "#e4f3ef"
   bright: "#ceeae4"
-  gold: "#926c29"
+  gold: "#78551f"
   hero-gold: "#f1cf83"
   paper: "#faf9f6"
   white: "#ffffff"

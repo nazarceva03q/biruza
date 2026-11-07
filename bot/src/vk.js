@@ -9,8 +9,8 @@ class VK{
   if(!this.photoPreviewEnabled||!this.mediaBase)return this.send(peer,text,id,rows);
   let attachment;
   try{
-   const base=this.mediaBase.replace(/\/$/,'')+'/media/',u=new URL(url);
-   if(u.protocol!=='https:'||!u.href.startsWith(base))throw Error('PREVIEW_URL');
+   const base=this.mediaBase.replace(/\/$/,'')+'/media/',u=new URL(/^assets\/[a-z0-9-]+\.(png|jpg|webp)$/i.test(url)?'https://biruza33.ru/'+url:url);
+   if(u.protocol!=='https:'||!(u.href.startsWith(base)||u.origin==='https://biruza33.ru'&&/^\/assets\/[a-z0-9-]+\.(png|jpg|webp)$/i.test(u.pathname)))throw Error('PREVIEW_URL');
    const r=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(8000)});if(!r.ok)throw Error('PREVIEW_FETCH');
    const mime=(r.headers.get('content-type')||'').split(';')[0];if(!['image/jpeg','image/png','image/webp'].includes(mime))throw Error('PREVIEW_MIME');
    const parts=[];let size=0;for await(const part of r.body){size+=part.length;if(size>10*1024*1024)throw Error('PREVIEW_SIZE');parts.push(Buffer.from(part))}

@@ -19,8 +19,9 @@ function preview(p){
  lines.push('Фото: '+p.images.length+' шт.');lines.push('Хит: '+(p.hit?'да':'нет'));
  return lines.join('\n');
 }
-const norm=s=>String(s).toLocaleLowerCase('ru').replace(/ё/g,'е').replace(/[^a-zа-я0-9]+/g,' ').trim();
-function search(products,text){const q=norm(text),words=q.split(' ').filter(Boolean);if(!words.length)return[];return products.map(p=>{const n=norm(p.name),nw=n.split(' ');return{p,score:n===q?100:n.includes(q)?80:words.every(w=>nw.some(v=>w===v||Math.min(w.length,v.length)>=4&&(w.startsWith(v)||v.startsWith(w))))?60:0}}).filter(x=>x.score).sort((a,b)=>b.score-a.score||a.p.name.localeCompare(b.p.name,'ru')).slice(0,5).map(x=>x.p)}
+const {score}=require('./search');
+function search(products,text){return products.map(p=>({p,score:score(p.name,text)})).filter(x=>x.score).sort((a,b)=>b.score-a.score||a.p.name.localeCompare(b.p.name,'ru')).slice(0,5).map(x=>x.p)}
+const galleryAliases={wedding:'Свадебные композиции Свадьбы Оформление свадеб',store_opening:'Открытия магазинов Оформление магазина',event:'Праздники и мероприятия Оформление праздников событий'};
 function photoManageRows(images){return images.map((_,i)=>[[`🗑 Удалить фото ${i+1}`,'photo_remove:'+i]]).concat([[['➕ Добавить фото','photos_add']],[['⬅️ Назад к предпросмотру','photos_back']]])}
 async function reduce(s,e,catalog){
  const cmd=e.command,text=(e.text||'').trim();
@@ -39,14 +40,25 @@ async function reduce(s,e,catalog){
   if(s.step==='preview_category'&&s.draft){Object.assign(s.draft,category);return showPreview()}
   s.draft={...category,id:'p-'+hash(e.id).slice(0,24),name:'',description:'',composition:'',price:null,priceLabel:'',hit:false,images:[],icon:category.domain==='balloons'?'balloon':category.domain==='gifts'?'gift':'flower',version:0};s.expected=0;return showField('photos');
  }
- if(cmd==='edit'||cmd==='delete'){s={step:'search',action:cmd};return result('Напишите название товара, который нужно '+(cmd==='delete'?'удалить.':'изменить.'))}
+ if(cmd==='edit'||cmd==='delete'){s={step:'search',action:cmd};return result('Напишите название товара, который нужно '+(cmd==='delete'?'удалить, или название раздела оформления.':'изменить.'))}
  const showMatch=index=>{
   const id=s.matches?.[index],p=c.products.find(p=>p.id===id);if(!p)return result('Этот товар уже удалён. Напишите название для нового поиска.');s.matchIndex=index;
   const navigation=[];if(index>0)navigation.push(['← Предыдущий','match:'+(index-1)]);if(index+1<s.matches.length)navigation.push(['Следующий →','match:'+(index+1)]);
   return result(`Товар ${index+1} из ${s.matches.length}\n\n${p.name}\n${pricing.format(p.price,p.priceLabel)}\n\n${p.composition||''}\n${p.description||''}\n\nКатегория: ${p.category}`,[[['Этот товар','pick:'+p.id]],...(navigation.length?[navigation]:[]),...back],p.images[0]);
  };
- if(s.step==='search'&&!cmd){const matches=search(c.products,text);if(!matches.length)return result('Ничего не найдено похожего на «'+text+'». Попробуйте написать по-другому.');s.matches=matches.map(p=>p.id);return showMatch(0)}
+ if(s.step==='search'&&!cmd){const matches=search(c.products,text);if(s.action==='delete'){const found=galleries.map(id=>({id,score:score(galleryAliases[id],text)})).filter(x=>x.score).sort((a,b)=>b.score-a.score);if(found.length){s.step='delete_gallery_select';s.galleryMatches=found.map(x=>x.id);return result('Выберите раздел оформления:',found.map(x=>[[names[x.id],'delete_gallery:'+x.id]]).concat(matches.map(p=>[[p.name,'delete_product:'+p.id]]),back))}}if(!matches.length)return result('Ничего не найдено похожего на «'+text+'». Попробуйте написать по-другому.');s.matches=matches.map(p=>p.id);return showMatch(0)}
  if(s.step==='search'&&cmd?.startsWith('match:')){const index=Number(cmd.slice(6));if(Number.isInteger(index)&&index>=0&&index<(s.matches||[]).length)return showMatch(index);return result('Выберите товар из последнего результата поиска.')}
+ const showGalleryPhoto=index=>{const list=c.galleries[s.gallery]||[];if(!list.length)return reset('В разделе «'+names[s.gallery]+'» больше нет фотографий.');s.step='delete_gallery_photo';s.photoIndex=Math.max(0,Math.min(index,list.length-1));const photo=list[s.photoIndex];s.photoId=photo.id;const nav=[];if(s.photoIndex>0)nav.push(['← Предыдущее','delete_photo_prev']);if(s.photoIndex+1<list.length)nav.push(['Следующее →','delete_photo_next']);return result(names[s.gallery]+'\nФото '+(s.photoIndex+1)+' из '+list.length,[[['🗑 Удалить это фото','delete_photo_select']],...(nav.length?[nav]:[]),...back],photo.url)};
+ if(s.step==='delete_gallery_select'&&cmd?.startsWith('delete_product:')){const p=c.products.find(p=>p.id===cmd.slice(15));if(!p)return reset('Товар уже удалён.');s.draft=structuredClone(p);s.expected=p.version;s.step='delete_confirm';return result('Удалить товар «'+p.name+'»?',[[['Да','delete_confirm'],['Нет','cancel']],...back])}
+ if(s.step==='delete_gallery_select'&&cmd?.startsWith('delete_gallery:')){const id=cmd.slice(15);if(!s.galleryMatches.includes(id))return reset();s.gallery=id;return showGalleryPhoto(0)}
+ if(s.step==='delete_gallery_photo'){
+  if(cmd==='delete_photo_prev'||cmd==='delete_photo_next')return showGalleryPhoto(s.photoIndex+(cmd==='delete_photo_next'?1:-1));
+  if(cmd==='delete_photo_select'){s.step='delete_gallery_confirm';return result('Удалить это фото из раздела «'+names[s.gallery]+'»?',[[['Да, удалить','delete_photo_confirm'],['Нет','delete_photo_back']],...back],c.galleries[s.gallery].find(p=>p.id===s.photoId)?.url)}
+ }
+ if(s.step==='delete_gallery_confirm'){
+  if(cmd==='delete_photo_back')return showGalleryPhoto(s.photoIndex);
+  if(cmd==='delete_photo_confirm'){await catalog.removePhoto(s.gallery,s.photoId,'gallery-delete:'+e.id);return reset('🗑 Фото удалено из раздела «'+names[s.gallery]+'».')}
+ }
  if(cmd?.startsWith('pick:')&&s.step==='search'){
   const id=cmd.slice(5);if(!s.matches?.includes(id))return result('Этот результат поиска устарел. Напишите название ещё раз.');const p=c.products.find(p=>p.id===id);if(!p)return result('Этот товар уже удалён. Напишите название для нового поиска.');s.draft=structuredClone(p);s.expected=p.version;
   if(s.action==='delete'){s.step='delete_confirm';return result('Удалить товар «'+p.name+'»?',[[['Да','delete_confirm'],['Нет','cancel']],...back])}return showPreview();
