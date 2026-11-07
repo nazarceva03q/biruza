@@ -3,7 +3,7 @@ const crypto=require('node:crypto');
 const {mutate}=require('./storage');
 const flow=require('./adminFlow');
 const {back}=flow;
-const stateKeys=['step','draft','expected','action','matches','searchPage','gallery','galleryMatches','galleryPage','visiblePhotos','photoId','photos','field','fromPreview','carouselMessage'];
+const stateKeys=['step','draft','expected','action','matches','searchPage','gallery','galleryMatches','galleryPage','visiblePhotos','photoId','photos','field','fromPreview','carouselMessage','selectionMessage'];
 const stateOf=s=>Object.fromEntries(stateKeys.filter(key=>s[key]!==undefined).map(key=>[key,structuredClone(s[key])]));
 function buttonState(session,event){
  if(!event.command||event.nonce===String(session.revision)||['menu','add','edit','delete','galleries','cancel'].includes(event.command))return session;
@@ -43,7 +43,7 @@ class Admin{
    else ({session:s,reply}=await this.reduce(s,{...event,command:'menu'}));
    s.buttonContexts=Object.fromEntries(Object.entries(session.buttonContexts||{}).filter(([,context])=>context.at>now-86400000).slice(-39));
    if(session.revision)s.buttonContexts[session.revision]={at:now,state:stateOf(session)};
-   if(reply.carousel&&(/^(search_page|gallery_page):/.test(event.command||'')||event.command==='delete_photo_back')&&session.carouselMessage)reply.messageId=session.carouselMessage;
+   if(reply.selection&&(/^(search_page|gallery_page|delete_photo_pick):/.test(event.command||'')||event.command==='delete_photo_back')&&restored?.selectionMessage)reply.messageId=restored.selectionMessage;
    s.handledEvents=Object.fromEntries(Object.entries(session.handledEvents||{}).filter(([,r])=>r.at>now-2*86400000));
    if(session.lastEvent&&!s.handledEvents[session.lastEvent])s.handledEvents[session.lastEvent]={at:now,replySent:true};
    s.handledEvents[id]={at:now,replySent:false};
@@ -55,15 +55,17 @@ class Admin{
  }
  async deliver(key,user,reply,id,revision){
   const token=crypto.randomUUID(),now=this.now();let acquired=false,done=false;
-  await mutate(this.db,key,s=>{const record=s?.handledEvents?.[id];if(!record)return;if(record.replySent){done=true;return}if(record.delivery?.until>now)return;record.delivery={token,until:now+110000};acquired=true;return s});
+  await mutate(this.db,key,s=>{const record=s?.handledEvents?.[id];if(!record)return;if(record.replySent){done=true;return}if(record.delivery?.until>now)return;record.delivery={token,until:now+45000};acquired=true;return s});
   if(done)return;if(!acquired)throw Error('ADMIN_REPLY_BUSY');
   try{const messageId=await this.reply(user,reply,id,revision);await this.markReplySent(key,id,messageId)}
   catch(error){await mutate(this.db,key,s=>{const record=s?.handledEvents?.[id];if(record?.delivery?.token===token){delete record.delivery;return s}});throw error}
  }
- async markReplySent(key,id,messageId){await mutate(this.db,key,s=>{if(!s?.handledEvents?.[id]||s.handledEvents[id].replySent)return;s.handledEvents[id].replySent=true;delete s.handledEvents[id].delivery;if(messageId)s.carouselMessage=messageId;return s})}
+ async markReplySent(key,id,messageId){await mutate(this.db,key,s=>{if(!s?.handledEvents?.[id]||s.handledEvents[id].replySent)return;s.handledEvents[id].replySent=true;delete s.handledEvents[id].delivery;if(messageId&&s.lastEvent===id)s.selectionMessage=messageId;return s})}
  async reply(user,reply,id,revision){
   const rows=(reply.rows||back).map(row=>row.map(([label,command])=>[label,command==='menu'?'menu':command+'|'+(revision??'')]));
-  if(reply.carousel){const cards=reply.carousel.map(card=>({...card,command:card.command+'|'+(revision??'')}));return this.vk.sendCarousel(user,reply.text,id+':carousel',rows,cards,reply.messageId)}
+  if(reply.selection)return this.vk.sendSelection(user,reply.text,id+':selection',rows,reply.photo,reply.messageId);
+  // Recover a pending reply from versions that still stored a native carousel.
+  if(reply.carousel){const card=reply.carousel[0];return this.vk.sendSelection(user,reply.text+'\n\n'+card.title,id+':selection',[[[card.label,card.command+'|'+revision]],...rows],card.photo)}
   // VK inline keyboards: max 6 rows / 10 buttons. Menus are split consistently.
   const pages=[];let page=[],count=0;
   for(const row of rows){if(page.length===6||count+row.length>10){pages.push(page);page=[];count=0}page.push(row);count+=row.length}if(page.length)pages.push(page);

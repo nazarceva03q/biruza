@@ -45,16 +45,15 @@ class VK{
   let attachment;try{attachment=await this.uploadPhoto(peer,url)}catch(error){text+='\n\nФото не удалось загрузить в VK. Код: '+(/^[A-Z0-9_]+$/.test(error.message)?error.message:error.name)+'. Повторите просмотр.'}
   return this.send(peer,text,id,rows,attachment);
  }
- async sendCarousel(peer,text,id,rows,cards,messageId){
-  if(!cards.length||cards.length>10)throw Error('CAROUSEL_SIZE');
-  const elements=[],deadline=AbortSignal.timeout(80000);
-  for(const card of cards){
-   const photo=card.photo?await this.uploadPhoto(peer,card.photo,deadline):null;
-   elements.push({title:[...card.title].slice(0,80).join(''),description:[...(card.description||'Выберите эту карточку')].slice(0,80).join(''),...(photo?{photo_id:photo.replace(/^photo/,'').split('_').slice(0,2).join('_'),action:{type:'open_photo'}}:{}),buttons:[{action:{type:'callback',label:card.label||'Выбрать',payload:JSON.stringify({command:card.command})},color:'primary'}]});
-  }
-  const params={peer_id:peer,message:text,template:JSON.stringify({type:'carousel',elements}),disable_mentions:1,dont_parse_links:1,keyboard:JSON.stringify({inline:true,buttons:rows.map(row=>row.map(([label,command])=>({action:{type:'callback',label,payload:JSON.stringify({command})},color:'secondary'})))})};
-  if(messageId){await this.call('messages.edit',{...params,message_id:messageId});return messageId}
-  const result=await this.call('messages.send',{...params,random_id:randomId(id)});if(!Number.isInteger(result)||result<=0)throw Error('VK_SEND_UNKNOWN');return result;
+ async sendSelection(peer,text,id,rows,url,messageId){
+  // Selection never calls VK's photo-upload service. Originals open directly.
+  let photoUrl;
+  if(url){try{const u=new URL(/^assets\/[a-z0-9-]+\.(png|jpg|webp)$/i.test(url)?'https://biruza33.ru/'+url:url);const base=(this.mediaBase||'').replace(/\/$/,'')+'/media/';if(u.protocol==='https:'&&(u.href.startsWith(base)||u.origin==='https://biruza33.ru'&&/^\/assets\/[a-z0-9-]+\.(png|jpg|webp)$/i.test(u.pathname)))photoUrl=u.href}catch{}}
+  const buttons=rows.map(row=>row.map(([label,command])=>({action:{type:'callback',label,payload:JSON.stringify({command})},color:'secondary'})));
+  if(photoUrl)buttons.splice(Math.min(1,buttons.length),0,[{action:{type:'open_link',label:'Открыть фото',link:photoUrl}}]);
+  const params={peer_id:peer,message:text,disable_mentions:1,dont_parse_links:1,keyboard:JSON.stringify({inline:true,buttons})};
+  if(messageId){try{await this.call('messages.edit',{...params,message_id:messageId,attachment:''});return messageId}catch{/* An old/noneditable message is replaced by one ordinary message. */}}
+  const current=await this.call('messages.send',{...params,random_id:randomId(id)});if(!Number.isInteger(current)||current<=0)throw Error('VK_SEND_UNKNOWN');return current;
  }
  async sendPart(peer,text,id){const result=await this.call('messages.send',{peer_ids:String(peer),message:text,random_id:randomId(id),disable_mentions:1,dont_parse_links:1});const item=Array.isArray(result)?result.find(x=>x.peer_id===peer):null;if(!item||item.error||!Number.isInteger(item.conversation_message_id)||item.conversation_message_id<=0)throw Error('VK_SEND_UNKNOWN');return item.conversation_message_id}
  async remove(peer,cmid){const r=await this.call('messages.delete',{peer_id:peer,cmids:String(cmid),delete_for_all:1});return Array.isArray(r)&&r.some(x=>x.peer_id===peer&&x.conversation_message_id===cmid&&x.response===1&&!x.error)}
