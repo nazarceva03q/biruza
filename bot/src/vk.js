@@ -3,33 +3,38 @@ const {hash}=require('./storage');
 const randomId=s=>parseInt(hash(s).slice(0,8),16)%2147483646+1;
 class VK{
  constructor(token,options={}){if(!token)throw Error('VK_CONFIG');this.token=token;this.mediaBase=options.mediaBase;this.photoPreviewEnabled=options.photoPreviewEnabled??true}
- async call(method,params,attempt=0){const r=await fetch('https://api.vk.com/method/'+method,{method:'POST',body:new URLSearchParams({...params,access_token:this.token,v:'5.199'}),signal:AbortSignal.timeout(12000)});if(!r.ok)throw Error('VK_HTTP');const j=await r.json();if(j.error){if(Number(j.error.error_code)===6&&attempt<2){await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)));return this.call(method,params,attempt+1)}throw Error('VK_'+Number(j.error.error_code))}return j.response}
+ async call(method,params,attempt=0,signal){const r=await fetch('https://api.vk.com/method/'+method,{method:'POST',body:new URLSearchParams({...params,access_token:this.token,v:'5.199'}),signal:signal?AbortSignal.any([signal,AbortSignal.timeout(12000)]):AbortSignal.timeout(12000)});if(!r.ok)throw Error('VK_HTTP');const j=await r.json();if(j.error){if(Number(j.error.error_code)===6&&attempt<2){await new Promise(resolve=>setTimeout(resolve,500*(attempt+1)));return this.call(method,params,attempt+1,signal)}throw Error('VK_'+Number(j.error.error_code))}return j.response}
  async send(peer,text,id,rows,attachment){const chars=[...String(text)],parts=[];while(chars.length)parts.push(chars.splice(0,3500).join(''));for(let i=0;i<parts.length;i++)await this.call('messages.send',{peer_id:peer,message:parts[i],random_id:randomId(id+':'+i),disable_mentions:1,dont_parse_links:1,...(attachment&&i===parts.length-1?{attachment}:{}),...(rows&&i===parts.length-1?{keyboard:JSON.stringify({inline:true,buttons:rows.map(row=>row.map(([label,command])=>({action:{type:'callback',label,payload:JSON.stringify({command})},color:'secondary'})))})}:{})})}
- async uploadPhoto(peer,url){
+ async uploadPhoto(peer,url,deadline){
+  const signal=deadline||AbortSignal.timeout(45000);
   if(!this.photoPreviewEnabled||!this.mediaBase)throw Error('PREVIEW_DISABLED');
    const base=this.mediaBase.replace(/\/$/,'')+'/media/',u=new URL(/^assets\/[a-z0-9-]+\.(png|jpg|webp)$/i.test(url)?'https://biruza33.ru/'+url:url);
    if(u.protocol!=='https:'||!(u.href.startsWith(base)||u.origin==='https://biruza33.ru'&&/^\/assets\/[a-z0-9-]+\.(png|jpg|webp)$/i.test(u.pathname)))throw Error('PREVIEW_URL');
-   const r=await fetch(u,{redirect:'error',signal:AbortSignal.timeout(8000)});if(!r.ok)throw Error('PREVIEW_FETCH');
+   const r=await fetch(u,{redirect:'error',signal:AbortSignal.any([signal,AbortSignal.timeout(12000)])});if(!r.ok)throw Error('PREVIEW_FETCH');
    const mime=(r.headers.get('content-type')||'').split(';')[0];if(!['image/jpeg','image/png','image/webp'].includes(mime))throw Error('PREVIEW_MIME');
    const parts=[];let size=0;for await(const part of r.body){size+=part.length;if(size>10*1024*1024)throw Error('PREVIEW_SIZE');parts.push(Buffer.from(part))}
-   const upload=await this.call('photos.getMessagesUploadServer',{peer_id:peer}),endpoint=new URL(upload.upload_url);
-   if(endpoint.protocol!=='https:'||!/(^|\.)(vk\.com|vk\.ru|userapi\.com|vkuserphoto\.ru)$/.test(endpoint.hostname))throw Error('PREVIEW_UPLOAD');
+   const upload=await this.call('photos.getMessagesUploadServer',{peer_id:peer},0,signal),endpoint=new URL(upload.upload_url);
+   // This URL comes only from the authenticated VK API, never from a user.
+   // VK changes upload domains; do not reject a new official host by a stale suffix list.
+   if(endpoint.protocol!=='https:'||endpoint.username||endpoint.password||endpoint.port&&endpoint.port!=='443'||!endpoint.hostname.includes('.')||/^(localhost|127\.|10\.|192\.168\.|169\.254\.|172\.(1[6-9]|2[0-9]|3[01])\.)/.test(endpoint.hostname)||endpoint.hostname.includes(':'))throw Error('PREVIEW_UPLOAD_URL');
    const body=new FormData();body.append('photo',new Blob([Buffer.concat(parts)],{type:mime}),'photo.'+(mime==='image/png'?'png':mime==='image/webp'?'webp':'jpg'));
-   const saved=await fetch(endpoint,{method:'POST',body,redirect:'error',signal:AbortSignal.timeout(10000)});if(!saved.ok)throw Error('PREVIEW_UPLOAD');
-   const data=await saved.json(),photos=await this.call('photos.saveMessagesPhoto',{server:data.server,photo:data.photo,hash:data.hash}),photo=photos?.[0];
-   if(!Number.isInteger(photo?.owner_id)||!Number.isInteger(photo?.id))throw Error('PREVIEW_UPLOAD');
+   const saved=await fetch(endpoint,{method:'POST',body,redirect:'error',signal:AbortSignal.any([signal,AbortSignal.timeout(25000)])});if(!saved.ok)throw Error('PREVIEW_UPLOAD_HTTP_'+saved.status);
+   let data;try{data=await saved.json()}catch{throw Error('PREVIEW_UPLOAD_RESPONSE')}
+   if(!data?.server||typeof data.photo!=='string'||!data.hash||data.photo==='[]')throw Error('PREVIEW_UPLOAD_EMPTY');
+   const photos=await this.call('photos.saveMessagesPhoto',{server:data.server,photo:data.photo,hash:data.hash},0,signal),photo=photos?.[0];
+   if(!Number.isInteger(photo?.owner_id)||!Number.isInteger(photo?.id))throw Error('PREVIEW_SAVE_EMPTY');
    return 'photo'+photo.owner_id+'_'+photo.id+(photo.access_key?'_'+photo.access_key:'');
  }
  async sendPhoto(peer,text,id,rows,url){
-  let attachment;try{attachment=await this.uploadPhoto(peer,url)}catch(error){text+='\n\nФото не удалось загрузить в VK. Проверьте права ключа сообщества на фотографии и повторите просмотр.'}
+  let attachment;try{attachment=await this.uploadPhoto(peer,url)}catch(error){text+='\n\nФото не удалось загрузить в VK. Код: '+(/^[A-Z0-9_]+$/.test(error.message)?error.message:error.name)+'. Повторите просмотр.'}
   return this.send(peer,text,id,rows,attachment);
  }
  async sendCarousel(peer,text,id,rows,cards,messageId){
   if(!cards.length||cards.length>10)throw Error('CAROUSEL_SIZE');
-  const elements=[];
+  const elements=[],deadline=AbortSignal.timeout(80000);
   // Bound parallel uploads to avoid exhausting callback resources.
   for(let i=0;i<cards.length;i+=3){const batch=await Promise.all(cards.slice(i,i+3).map(async card=>{
-   const photo=card.photo?await this.uploadPhoto(peer,card.photo):null;
+   const photo=card.photo?await this.uploadPhoto(peer,card.photo,deadline):null;
    return {title:[...card.title].slice(0,80).join(''),description:[...(card.description||'Выберите эту карточку')].slice(0,80).join(''),...(photo?{photo_id:photo.replace(/^photo/,'').split('_').slice(0,2).join('_'),action:{type:'open_photo'}}:{}),buttons:[{action:{type:'callback',label:card.label||'Выбрать',payload:JSON.stringify({command:card.command})},color:'primary'}]};
   }));elements.push(...batch)}
   const params={peer_id:peer,message:text,template:JSON.stringify({type:'carousel',elements}),disable_mentions:1,dont_parse_links:1,keyboard:JSON.stringify({inline:true,buttons:rows.map(row=>row.map(([label,command])=>({action:{type:'callback',label,payload:JSON.stringify({command})},color:'secondary'})))})};
