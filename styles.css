@@ -176,7 +176,7 @@ footer .logo.footer-logo{display:block!important;position:relative!important;wid
 /* Holiday photographs stay decorative beneath a readable, equal-height layout. */
 .holiday.holiday-photo{position:relative;isolation:isolate;overflow:hidden;min-height:340px;display:flex;flex-direction:column;background:var(--paper);padding:30px}
 .holiday-photo .holiday-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:center;z-index:-2}
-.holiday-photo::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(250,249,246,.95),rgba(250,249,246,.83) 55%,rgba(250,249,246,.68));z-index:-1;pointer-events:none}
+.holiday-photo::before{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(250,249,246,.84),rgba(250,249,246,.72) 52%,rgba(250,249,246,.22) 82%,rgba(250,249,246,.12));z-index:-1;pointer-events:none}
 .holiday-photo h3{min-height:2.4em;margin:20px 0 12px;line-height:1.2}
 .holiday-photo .countdown{color:var(--dark);margin:0 0 24px}
 .holiday-photo .button{margin-top:auto;align-self:flex-start;background:rgba(250,249,246,.9)}
