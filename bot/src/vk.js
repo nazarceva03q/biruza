@@ -55,7 +55,12 @@ class VK{
   if(messageId){try{await this.call('messages.edit',{...params,message_id:messageId,attachment:''});return messageId}catch{/* An old/noneditable message is replaced by one ordinary message. */}}
   const current=await this.call('messages.send',{...params,random_id:randomId(id)});if(!Number.isInteger(current)||current<=0)throw Error('VK_SEND_UNKNOWN');return current;
  }
- async sendPart(peer,text,id){const result=await this.call('messages.send',{peer_ids:String(peer),message:text,random_id:randomId(id),disable_mentions:1,dont_parse_links:1});const item=Array.isArray(result)?result.find(x=>x.peer_id===peer):null;if(!item||item.error||!Number.isInteger(item.conversation_message_id)||item.conversation_message_id<=0)throw Error('VK_SEND_UNKNOWN');return item.conversation_message_id}
+ async sendRequestPhoto(peer,text,id,url){
+  let attachment;try{attachment=await this.uploadPhoto(peer,url,AbortSignal.timeout(8000))}catch{}
+  // A photo server failure must not lose the order or its image reference.
+  return this.sendPart(peer,text+(attachment?'':'\nФото товара: '+url),id,attachment);
+ }
+ async sendPart(peer,text,id,attachment){const result=await this.call('messages.send',{peer_ids:String(peer),message:text,...(attachment?{attachment}:{}),random_id:randomId(id),disable_mentions:1,dont_parse_links:1});const item=Array.isArray(result)?result.find(x=>x.peer_id===peer):null;if(!item||item.error||!Number.isInteger(item.conversation_message_id)||item.conversation_message_id<=0)throw Error('VK_SEND_UNKNOWN');return item.conversation_message_id}
  async remove(peer,cmid){const r=await this.call('messages.delete',{peer_id:peer,cmids:String(cmid),delete_for_all:1});return Array.isArray(r)&&r.some(x=>x.peer_id===peer&&x.conversation_message_id===cmid&&x.response===1&&!x.error)}
 }
 module.exports={VK,randomId,multipartPhoto};

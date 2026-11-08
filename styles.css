@@ -170,3 +170,5 @@ footer .logo.footer-logo{display:block!important;position:relative!important;wid
 .product-description{white-space:pre-line;overflow-wrap:anywhere}
 
 .product-photo .photo-nav button,.detail-image .photo-nav button{display:grid;place-items:center}.photo-nav button svg{width:28px;height:28px;stroke-width:1.5;filter:drop-shadow(0 1px 2px #073d35)}
+
+.cart-item{grid-template-columns:76px minmax(0,1fr) auto auto}.cart-product-image{width:76px;height:88px;object-fit:cover;border-radius:12px}.cart-photo-empty{background:var(--mint)}@media(max-width:600px){.cart-item{grid-template-columns:64px minmax(0,1fr) auto;gap:12px}.cart-product-image{width:64px;height:76px;grid-row:span 2}.cart-item>.quantity{grid-column:2}.cart-item>.remove{grid-column:3;grid-row:1 / span 2}}

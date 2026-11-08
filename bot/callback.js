@@ -3,7 +3,9 @@ exports.handler=async event=>{
  const http=require('./src/http');
  if(event.httpMethod!=='POST')return{statusCode:405,body:'Method'};
  try{
-  const result=await require('./src/runtime')('callback').webhook.handle(http.body(event,100000));
+  const runtime=require('./src/runtime')('callback'),data=http.body(event,100000);
+  const result=await runtime.webhook.handle(data);
+  if(result.status===200&&['message_new','message_event'].includes(data.type))await runtime.catalog.retirePlaceholders();
   return{statusCode:result.status,headers:{'Content-Type':'text/plain; charset=utf-8'},body:result.body};
  }catch(error){
   // Only fixed operational codes. Never return raw messages, stack, keys or payload.

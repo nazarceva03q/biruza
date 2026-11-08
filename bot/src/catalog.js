@@ -1,12 +1,15 @@
 'use strict';
 const {mutate,hash}=require('./storage');
 const seed=require('../seed.json');
+const originalIds=new Set(seed.products.map(p=>p.id));
+const visibleProducts=products=>products.filter(p=>!originalIds.has(p.id)||(p.images||[]).length>0);
 const galleries=['wedding','store_opening','event'];
 const categories=seed.products.map(p=>({domain:p.domain,category:p.category}));
 class Catalog{
  constructor(db,media,mediaBase){Object.assign(this,{db,media,mediaBase})}
  async read(){return (await this.db.get('catalog/manifest.json')).data||structuredClone(seed)}
  async change(operation,fn){return mutate(this.db,'catalog/manifest.json',current=>{const c=current||structuredClone(seed);if(c.operations.includes(operation))return;c.revision++;fn(c);c.operations.push(operation);return c})}
+ async retirePlaceholders(){return this.change('retire-empty-seed-products-v1',c=>{c.products=visibleProducts(c.products)})}
  async append(gallery,photos,operation){if(!galleries.includes(gallery)||!photos.length)throw Error('GALLERY');return this.change(operation,c=>{for(const p of photos)if(!c.galleries[gallery].some(x=>x.id===p.id))c.galleries[gallery].push(p)})}
  async removePhoto(gallery,id,operation){if(!galleries.includes(gallery)||typeof id!=='string')throw Error('GALLERY');return this.change(operation,c=>{c.galleries[gallery]=c.galleries[gallery].filter(p=>p.id!==id)})}
  async save(product,operation,expected){
@@ -24,6 +27,6 @@ class Catalog{
   try{await this.media.binary(key,data,mime)}catch(e){if(e.code!=='CONFLICT')throw e}
   return{id,url:this.mediaBase.replace(/\/$/,'')+'/'+key};
  }
- public(c){const{operations,...manifest}=c;return manifest}
+ public(c){const{operations,...manifest}=c;return {...manifest,products:visibleProducts(manifest.products)}}
 }
-module.exports={Catalog,categories,galleries};
+module.exports={Catalog,categories,galleries,visibleProducts};

@@ -8,12 +8,11 @@ const digest=(key,text)=>crypto.createHmac('sha256',key).update(text).digest('he
 function identity(key){const match=/^(\d{13})\.([a-f0-9-]{36})$/.exec(key||'');if(!match)throw new Invalid('KEY');return Number(match[1])}
 function chunks(text){return Array.from({length:Math.ceil([...text].length/3000)},(_,i)=>[...text].slice(i*3000,(i+1)*3000).join(''))}
 function format(r){const p=r.payload;return chunks([
- `${types[p.requestType]} · ${r.id}`,`Получено: ${new Date(r.receivedAt).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК`,
- `Имя: ${p.name}`,`Контакт: ${p.phone}`,`Связаться: ${p.channel}`,p.subject&&`Тема: ${p.subject}`,p.date&&`Дата: ${p.date}`,
- p.delivery&&`Получение: ${p.delivery}`,p.time&&`Время: ${p.time}`,p.address&&`Адрес: ${p.address}`,
+ `${types[p.requestType]}`,`Получено: ${new Date(r.receivedAt).toLocaleString('ru-RU',{timeZone:'Europe/Moscow'})} МСК`,
+ `Имя: ${p.name}`,`Контакт: ${p.phone}`,`Связаться: ${p.channel}`,p.subject&&`Тема: ${p.subject}`,p.date&&`Желаемая дата заказа: ${p.date}`,
+ p.delivery&&`Получение: ${p.delivery}`,p.time&&`Желаемое время: ${p.time}`,p.address&&`Адрес: ${p.address}`,
  p.items.length&&'Товары:\n'+p.items.map(x=>`${x.name} × ${x.quantity}`).join('\n'),
- p.postcard&&`Открытка: ${p.postcard}`,p.comment&&`Пожелания: ${p.comment}`,
- 'Стоимость, наличие, состав, время и оплату необходимо подтвердить. Заявка не является оплаченным заказом.'
+ p.postcard&&`Открытка: ${p.postcard}`,p.comment&&`Пожелания: ${p.comment}`
  ].filter(Boolean).join('\n'))}
 async function rate(db,secret,source,now){
  const window=Math.floor(now/3600000);
@@ -34,10 +33,10 @@ class Requests{
   if(issued>now+60000||now-issued>DAY)throw new Invalid('KEY_EXPIRED',410);
   await rate(this.db,this.secret,source,now);
   const catalog=await this.catalog();
-  payload.items=payload.items.map(item=>{const p=catalog.products.find(p=>p.id===item.id);if(!p)throw new Invalid('PRODUCT');return{...item,name:p.name}});
+  payload.items=payload.items.map(item=>{const p=catalog.products.find(p=>p.id===item.id);if(!p)throw new Invalid('PRODUCT');return{...item,name:p.name,photo:(p.images||[])[0]||''}});
   if(!Number.isSafeInteger(this.peer)||this.peer<=2000000000)throw Error('PEER_CONFIG');
   record={id,fingerprint,receivedAt:now,expiresAt:now+RETENTION,technicalUntil:now+TECH,payload,peer:this.peer,delivery:'pending',parts:[],purge:'waiting'};
-  record.parts=format(record).map((_,i)=>({id:id+':'+i,state:'pending',cmid:null,attempts:0}));
+  const text=format(record);record.parts=text.map((_,i)=>({id:id+':'+i,state:'pending',cmid:null,attempts:0}));const pictures=payload.items.filter(item=>item.photo);for(let i=0;i<pictures.length;i++)record.parts.push({id:id+':photo:'+i,kind:'photo',itemIndex:payload.items.indexOf(pictures[i]),state:'pending',cmid:null,attempts:0});
   try{await this.db.put(path,record,null)}catch(e){if(e.code!=='CONFLICT')throw e;const existing=(await this.db.get(path)).data;if(!existing||existing.fingerprint!==fingerprint)throw new Invalid('KEY_CONFLICT',409);if(now>=existing.expiresAt||!existing.payload)throw new Invalid('EXPIRED',410);record=existing}
   return{accepted:true,id,delivery:record.delivery};
  }
@@ -58,7 +57,7 @@ class Requests{
    // Routing intent is durable before every external call; no message text in receipts.
    await mutate(this.db,path,x=>{if(x.lease?.token!==token||!x.payload||x.expiresAt<=this.now())throw Error('LEASE');x.parts[i]={...x.parts[i],state:'unknown',attempts:x.parts[i].attempts+1};return x});
    try{
-    const cmid=await this.vk.sendPart(current.peer,text[i],part.id);
+    const item=part.kind==='photo'?current.payload.items[part.itemIndex]:null;const cmid=item?await this.vk.sendRequestPhoto(current.peer,item.name+' × '+item.quantity,part.id,item.photo):await this.vk.sendPart(current.peer,text[i],part.id);
     await mutate(this.db,path,x=>{if(!x)return; x.parts[i]={...x.parts[i],state:'sent',cmid};return x});
    }catch{
     await mutate(this.db,path,x=>x?{...x,delivery:'uncertain',lease:null}:undefined);return;
