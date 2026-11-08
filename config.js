@@ -10,10 +10,10 @@ window.BIRUZA_CONFIG = Object.freeze({
   telegramUrl: 'https://t.me/biryuza_33',
   mapsUrl: 'https://yandex.ru/maps/?text=Владимир%2C%20улица%20Мира%2C%2053',
   // Только реальный проверенный обработчик. Секреты сюда не помещать.
-  inquiryEndpoint: '',
+  inquiryEndpoint: 'https://functions.yandexcloud.net/d4emnrjqj35vs99h7f89',
   catalogEndpoint: 'https://functions.yandexcloud.net/d4eh5nh981l02sbguq0d',
   mediaBaseUrl: 'https://storage.yandexcloud.net/biruza33-media',
-  privacyUrl: '',
-  consentVersion: '',
+  privacyUrl: 'privacy.html',
+  consentVersion: 'biruza-2026-11-07',
   timeZone: 'Europe/Moscow'
 });
