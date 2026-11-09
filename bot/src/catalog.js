@@ -3,16 +3,19 @@ const {mutate,hash}=require('./storage');
 const seed=require('../seed.json');
 const originalIds=new Set(seed.products.map(p=>p.id));
 const visibleProducts=products=>products.filter(p=>!originalIds.has(p.id)||(p.images||[]).length>0);
+const categoryName=name=>name==='Композиции в корзинках'?'Композиции':name;
+const normalizeCategories=c=>{c.products=c.products.map(p=>({...p,category:categoryName(p.category)}));return c};
 const galleries=['wedding','store_opening','event'];
 const categories=seed.products.map(p=>({domain:p.domain,category:p.category}));
 class Catalog{
  constructor(db,media,mediaBase){Object.assign(this,{db,media,mediaBase})}
- async read(){return (await this.db.get('catalog/manifest.json')).data||structuredClone(seed)}
- async change(operation,fn){return mutate(this.db,'catalog/manifest.json',current=>{const c=current||structuredClone(seed);if(c.operations.includes(operation))return;c.revision++;fn(c);c.operations.push(operation);return c})}
+ async read(){return normalizeCategories((await this.db.get('catalog/manifest.json')).data||structuredClone(seed))}
+ async change(operation,fn){return mutate(this.db,'catalog/manifest.json',current=>{const c=normalizeCategories(current||structuredClone(seed));if(c.operations.includes(operation))return;c.revision++;fn(c);c.operations.push(operation);return c})}
  async retirePlaceholders(){return this.change('retire-empty-seed-products-v1',c=>{c.products=visibleProducts(c.products)})}
  async append(gallery,photos,operation){if(!galleries.includes(gallery)||!photos.length)throw Error('GALLERY');return this.change(operation,c=>{for(const p of photos)if(!c.galleries[gallery].some(x=>x.id===p.id))c.galleries[gallery].push(p)})}
  async removePhoto(gallery,id,operation){if(!galleries.includes(gallery)||typeof id!=='string')throw Error('GALLERY');return this.change(operation,c=>{c.galleries[gallery]=c.galleries[gallery].filter(p=>p.id!==id)})}
  async save(product,operation,expected){
+  product={...product,category:categoryName(product.category)};
   if(!categories.some(c=>c.domain===product.domain&&c.category===product.category)||!product.name||product.name.length>150||product.description.length>3000||product.composition.length>2000||product.priceLabel!==undefined&&(typeof product.priceLabel!=='string'||product.priceLabel.length>120)||!(product.price===null||Number.isFinite(product.price)&&product.price>=0&&product.price<=10000000)||!Array.isArray(product.images)||product.images.length>20)throw Error('PRODUCT');
   return this.change(operation,c=>{const i=c.products.findIndex(x=>x.id===product.id);if(i>=0&&expected!==c.products[i].version)throw Error('PRODUCT_CONFLICT');const item={...product,version:(expected||0)+1};if(i<0)c.products.push(item);else c.products[i]=item});
  }
